@@ -21,12 +21,8 @@ jobs:
           arch: arm64
           aosp-clang: true
           aosp-gcc: true
-          android-version: 16
-          aosp-clang-version: r547379
-          # DODAJ OVE DVE LINIJE:
-          other-gcc64-branch: android12-release
-          other-gcc32-branch: android12-release
-          # ------------------
+          android-version: 12             # <--- PREVARANT: Lažemo ga da je Android 12 da bi skinuo GCC
+          aosp-clang-version: r547379     # <--- PRAVDA: Forsiramo Clang za Android 16 (ovo je jedino što se koristi za kernel)
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
