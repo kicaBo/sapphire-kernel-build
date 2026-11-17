@@ -20,7 +20,7 @@ jobs:
           config: vendor/sapphire_defconfig
           arch: arm64
           aosp-clang: true
-          aosp-gcc: false                 # <--- ISKLJUČENO: Ne dozvoljavamo Action-u da traži GCC
+          aosp-gcc: true                # <--- ISKLJUČENO: Ne dozvoljavamo Action-u da traži GCC
           android-version: 16             # <--- SADA SE POKLAPA: Tražimo Clang sa Android 16 grane
           aosp-clang-version: r547379
           anykernel3: true
