@@ -20,6 +20,7 @@ jobs:
           config: vendor/sapphire_defconfig
           arch: arm64
           aosp-clang: true
+          aosp-gcc: true              # <--- DODATO: Rešava grešku iz loga
           android-version: 16
           aosp-clang-version: r547379
           anykernel3: true
