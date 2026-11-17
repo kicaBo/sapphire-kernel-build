@@ -83,20 +83,57 @@ jobs:
           cd anykernel
           rm -rf .git .github README.md *placeholder*
 
+          # Kopiramo Image
           cp ../kernel/out/arch/arm64/boot/Image ./Image
 
-          sed -i \
-            -e "s|^kernel.string=.*|kernel.string=Angel Kernel ${{ env.FULL_KREL }}|" \
-            -e "s|^do.devicecheck=.*|do.devicecheck=1|" \
-            -e "s|^do.modules=.*|do.modules=0|" \
-            -e "s|^device.name1=.*|device.name1=sapphire|" \
-            -e "s|^device.name2=.*|device.name2=sapphiren|" \
-            -e "/^device.name[3-5]=/d" \
-            -e "s|^block=.*|block=boot;|" \
-            -e "s|^is_slot_device=.*|is_slot_device=auto;|" \
-            -e "s|^ramdisk_compression=.*|ramdisk_compression=auto;|" \
-            -e "s|^patch_vbmeta_flag=.*|patch_vbmeta_flag=auto;|" \
-            anykernel.sh
+          # GAZIMO DEFAULT Fajl i pisemo nas ispravan anykernel.sh
+          cat <<EOF > anykernel.sh
+          ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
+
+          ### AnyKernel setup
+          # global properties
+          properties() { '
+          kernel.string=Angel Kernel ${{ env.FULL_KREL }}
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=0
+          do.cleanup=1
+          do.cleanuponabort=0
+          do.check_boot_version=0
+          device.name1=sapphire
+          device.name2=sapphiren
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          keycheck.timeout=10
+          '; } # end properties
+
+          ### AnyKernel install
+          ## boot shell variables
+          block=boot
+          is_slot_device=auto
+          ramdisk_compression=auto
+          patch_vbmeta_flag=auto
+          no_magisk_check=1
+
+          # import functions/variables and setup patching
+          . tools/ak3-core.sh
+
+          # boot install (Preuzeto od belowzeroiq - najsigurnije za GKI)
+          if [ -L "/dev/block/bootdevice/by-name/init_boot_a" -o -L "/dev/block/by-name/init_boot_a" ]; then
+              split_boot
+              flash_boot
+          else
+              dump_boot
+              write_boot
+          fi
+          ## end boot install
+
+          ui_print " "
+          ui_print "Angel Kernel successfully flashed!"
+          ui_print " "
+          EOF
 
           ZIP_NAME="AngelKernel_sapphire_$(date +%Y%m%d)_${FULL_KREL}.zip"
           zip -r9 "../$ZIP_NAME" . -x '.git*' >/dev/null
