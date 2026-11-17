@@ -1,10 +1,10 @@
 name: Build Sapphire Kernel
 
 on:
-  workflow_dispatch:        # Ovo ti daje dugme "Run workflow" da pokreneš build ručno
+  workflow_dispatch:
 
 permissions:
-  contents: write           # Potrebno je da bi Action mogao da napravi Release i okači ZIP
+  contents: write
 
 jobs:
   build-kernel:
@@ -20,8 +20,8 @@ jobs:
           config: vendor/sapphire_defconfig
           arch: arm64
           aosp-clang: true
-          android-version: 14
-          aosp-clang-version: r522817
+          android-version: 16
+          aosp-clang-version: r547379
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
