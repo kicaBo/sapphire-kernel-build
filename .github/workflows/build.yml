@@ -1,3 +1,4 @@
+
 name: Build Sapphire Kernel
 
 on:
@@ -12,17 +13,23 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Build with dabao1955 Action
+      - name: Build Sapphire Kernel
         uses: dabao1955/kernel_build_action@v1.10.4
         with:
           kernel-url: https://github.com/The-Angel-Place-Sapphire/kernel_xiaomi_sapphire
           kernel-branch: lineage-23.2
           config: vendor/sapphire_defconfig
           arch: arm64
+
+          # AOSP toolchain
           aosp-clang: true
-          aosp-gcc: true                # <--- ISKLJUČENO: Ne dozvoljavamo Action-u da traži GCC
-          android-version: 16             # <--- SADA SE POKLAPA: Tražimo Clang sa Android 16 grane
+          aosp-gcc: true
+          android-version: 16
           aosp-clang-version: r547379
+
+          # AnyKernel3 ZIP
           anykernel3: true
+
+          # GitHub Release
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
