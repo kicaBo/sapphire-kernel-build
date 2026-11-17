@@ -20,9 +20,13 @@ jobs:
           config: vendor/sapphire_defconfig
           arch: arm64
           aosp-clang: true
-          aosp-gcc: true              # <--- DODATO: Rešava grešku iz loga
+          aosp-gcc: true
           android-version: 16
           aosp-clang-version: r547379
+          # DODAJ OVE DVE LINIJE:
+          other-gcc64-branch: android12-release
+          other-gcc32-branch: android12-release
+          # ------------------
           anykernel3: true
           release: true
           access-token: ${{ secrets.GITHUB_TOKEN }}
