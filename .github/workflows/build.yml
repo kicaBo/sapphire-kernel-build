@@ -1,0 +1,27 @@
+name: Build Sapphire Kernel
+
+on:
+  workflow_dispatch:        # Ovo ti daje dugme "Run workflow" da pokreneš build ručno
+
+permissions:
+  contents: write           # Potrebno je da bi Action mogao da napravi Release i okači ZIP
+
+jobs:
+  build-kernel:
+    name: Build Kernel
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Build with dabao1955 Action
+        uses: dabao1955/kernel_build_action@v1.10.4
+        with:
+          kernel-url: https://github.com/The-Angel-Place-Sapphire/kernel_xiaomi_sapphire
+          kernel-branch: lineage-23.2
+          config: vendor/sapphire_defconfig
+          arch: arm64
+          aosp-clang: true
+          android-version: 14
+          aosp-clang-version: r522817
+          anykernel3: true
+          release: true
+          access-token: ${{ secrets.GITHUB_TOKEN }}
