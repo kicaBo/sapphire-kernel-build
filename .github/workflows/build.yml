@@ -22,7 +22,7 @@ jobs:
             lib32readline-dev lib32z1-dev libelf-dev liblz4-tool \
             libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop \
             pngcrush rsync schedtool squashfs-tools xsltproc zip \
-            zlib1g-dev python3 python-is-python3 libtfm-dev
+            zlib1g-dev python3 python-is-python3
 
       - name: Download AOSP Clang (Android 16)
         run: |
@@ -30,14 +30,13 @@ jobs:
           CLANG_DIR=$(ls -d $HOME/clang/clang-r* | head -n 1)
           echo "$CLANG_DIR/bin" >> $GITHUB_PATH
 
-      - name: Clone kernel (sa submodulima)
+      - name: Clone kernel
         run: |
-          # --recursive je kljucno za GKI/Qualcomm repo (msm-kernel)
-          git clone --depth=1 --recursive -b lineage-23.2 \
+          git clone --depth=1 -b lineage-23.2 \
             https://github.com/The-Angel-Place-Sapphire/kernel_xiaomi_sapphire \
             kernel
 
-      - name: Build kernel (Pametni build)
+      - name: Build kernel (Image only)
         working-directory: kernel
         env:
           ARCH: arm64
@@ -53,41 +52,31 @@ jobs:
           export HOSTCC="gcc"
           export HOSTCXX="g++"
 
-          # Provera da li repo koristi build.sh (standard za Qualcomm GKI)
-          if [ -f "build.sh" ]; then
-            echo "Pronadjen build.sh, pokrecemo GKI build..."
-            chmod +x build.sh
-            # Cesto je potrebno zadati target i config
-            ./build.sh -j$(nproc) vendor/sapphire_defconfig 2>&1 || ./build.sh 2>&1
-          else
-            echo "Nema build.sh, pokrecemo klasican make sa modulima i DTB..."
-            rm -rf out && mkdir out
-            make O=out vendor/sapphire_defconfig
-            make O=out -j$(nproc) Image.gz dtbo.img modules
-          fi
+          rm -rf out && mkdir out
+          make O=out vendor/sapphire_defconfig
+          
+          # Pravimo samo Image, kao u tvom originalnom skriptu
+          make O=out -j$(nproc) Image
 
-          echo "KREL=$(cat out/include/config/kernel.release 2>/dev/null || cat include/config/kernel.release 2>/dev/null || echo 'Unknown')" >> $GITHUB_ENV
+          IMG=out/arch/arm64/boot/Image
+          [ -f "$IMG" ] || { echo "Image nije napravljen!"; exit 1; }
+          echo "KREL=$(cat out/include/config/kernel.release)" >> $GITHUB_ENV
+          echo "Image size: $(du -h "$IMG" | cut -f1)"
 
-      - name: Package AnyKernel3 (GKI moduli i DTB)
+      - name: Package AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3 anykernel
           cd anykernel
           rm -rf .git .github README.md *placeholder*
 
-          # Nalazimo Image i DTB (bilo da je u out/ ili u common/out/)
-          find ../kernel -name "Image*" -exec cp {} ./Image \;
-          find ../kernel -name "dtbo.img" -exec cp {} ./dtbo.img \;
-          find ../kernel -name "*.dtb" -exec cp {} ./ \;
+          # Kopiramo samo Image
+          cp ../kernel/out/arch/arm64/boot/Image ./Image
 
-          # Nalazimo Module i pakujemo ih
-          mkdir -p modules
-          find ../kernel -name "*.ko" -exec cp {} modules/ \;
-
-          # Podesavanje AnyKernel3
+          # Tvoja originalna AnyKernel3 podešavanja (do.modules=0)
           sed -i \
             -e "s|^kernel.string=.*|kernel.string=Angel Kernel ${{ env.KREL }}|" \
             -e "s|^do.devicecheck=.*|do.devicecheck=1|" \
-            -e "s|^do.modules=.*|do.modules=1|" \
+            -e "s|^do.modules=.*|do.modules=0|" \
             -e "s|^device.name1=.*|device.name1=sapphire|" \
             -e "s|^device.name2=.*|device.name2=sapphiren|" \
             -e "/^device.name[3-5]=/d" \
