@@ -26,8 +26,11 @@ jobs:
 
       - name: Download AOSP Clang (Android 16)
         run: |
+          # Skidamo Clang sa Android 16 grane
           git clone --depth=1 -b android16-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 $HOME/clang
+          # Pronalazimo tacan direktorijum (npr. clang-r547379) i dodajemo ga u PATH
           CLANG_DIR=$(ls -d $HOME/clang/clang-r* | head -n 1)
+          echo "Pronadjen Clang u: $CLANG_DIR"
           echo "$CLANG_DIR/bin" >> $GITHUB_PATH
 
       - name: Clone kernel
@@ -55,7 +58,7 @@ jobs:
           rm -rf out && mkdir out
           make O=out vendor/sapphire_defconfig
           
-          # Pravimo samo Image, kao u tvom originalnom skriptu
+          # Pravimo samo Image
           make O=out -j$(nproc) Image
 
           IMG=out/arch/arm64/boot/Image
@@ -69,10 +72,10 @@ jobs:
           cd anykernel
           rm -rf .git .github README.md *placeholder*
 
-          # Kopiramo samo Image
+          # Kopiramo Image
           cp ../kernel/out/arch/arm64/boot/Image ./Image
 
-          # Tvoja originalna AnyKernel3 podešavanja (do.modules=0)
+          # Tvoja originalna AnyKernel3 podešavanja
           sed -i \
             -e "s|^kernel.string=.*|kernel.string=Angel Kernel ${{ env.KREL }}|" \
             -e "s|^do.devicecheck=.*|do.devicecheck=1|" \
