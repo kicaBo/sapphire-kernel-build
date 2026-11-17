@@ -13,6 +13,11 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -22,13 +27,18 @@ jobs:
             lib32readline-dev lib32z1-dev libelf-dev liblz4-tool \
             libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop \
             pngcrush rsync schedtool squashfs-tools xsltproc zip \
-            zlib1g-dev python3 python-is-python3
+            zlib1g-dev python3 python-is-python3 device-tree-compiler \
+            dwarves
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-sapphire-${{ github.ref_name }}
+          max-size: 2G
 
       - name: Download AOSP Clang (Android 16)
         run: |
-          # Skidamo Clang sa Android 16 grane
           git clone --depth=1 -b android16-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 $HOME/clang
-          # Pronalazimo tacan direktorijum (npr. clang-r547379) i dodajemo ga u PATH
           CLANG_DIR=$(ls -d $HOME/clang/clang-r* | head -n 1)
           echo "Pronadjen Clang u: $CLANG_DIR"
           echo "$CLANG_DIR/bin" >> $GITHUB_PATH
@@ -52,18 +62,19 @@ jobs:
           export PATH="/usr/lib/ccache:$PATH"
           export CC="ccache clang"
           export CXX="ccache clang++"
-          export HOSTCC="gcc"
-          export HOSTCXX="g++"
+          export HOSTCC="ccache gcc"
+          export HOSTCXX="ccache g++"
 
           rm -rf out && mkdir out
           make O=out vendor/sapphire_defconfig
-          
-          # Pravimo samo Image
           make O=out -j$(nproc) Image
 
           IMG=out/arch/arm64/boot/Image
           [ -f "$IMG" ] || { echo "Image nije napravljen!"; exit 1; }
-          echo "KREL=$(cat out/include/config/kernel.release)" >> $GITHUB_ENV
+          
+          KREL=$(cat out/include/config/kernel.release)
+          GIT_HASH=$(git rev-parse --short HEAD)
+          echo "FULL_KREL=$KREL-$GIT_HASH" >> $GITHUB_ENV
           echo "Image size: $(du -h "$IMG" | cut -f1)"
 
       - name: Package AnyKernel3
@@ -72,12 +83,10 @@ jobs:
           cd anykernel
           rm -rf .git .github README.md *placeholder*
 
-          # Kopiramo Image
           cp ../kernel/out/arch/arm64/boot/Image ./Image
 
-          # Tvoja originalna AnyKernel3 podešavanja
           sed -i \
-            -e "s|^kernel.string=.*|kernel.string=Angel Kernel ${{ env.KREL }}|" \
+            -e "s|^kernel.string=.*|kernel.string=Angel Kernel ${{ env.FULL_KREL }}|" \
             -e "s|^do.devicecheck=.*|do.devicecheck=1|" \
             -e "s|^do.modules=.*|do.modules=0|" \
             -e "s|^device.name1=.*|device.name1=sapphire|" \
@@ -89,19 +98,23 @@ jobs:
             -e "s|^patch_vbmeta_flag=.*|patch_vbmeta_flag=auto;|" \
             anykernel.sh
 
-          ZIP="../AngelKernel-sapphire-$(date +%Y%m%d-%H%M).zip"
-          zip -r9 "$ZIP" . -x '.git*' >/dev/null
-          echo "ZIP=$ZIP" >> $GITHUB_ENV
+          ZIP_NAME="AngelKernel_sapphire_$(date +%Y%m%d)_${FULL_KREL}.zip"
+          zip -r9 "../$ZIP_NAME" . -x '.git*' >/dev/null
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AngelKernel-sapphire
-          path: AngelKernel-sapphire-*.zip
+          path: AngelKernel_sapphire_*.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Angel Kernel Build ${{ github.run_number }}
-          files: AngelKernel-sapphire-*.zip
+          name: Build ${{ github.run_number }} - ${{ env.FULL_KREL }}
+          body: |
+            Automatski build za Sapphire/SapphireN
+            Kernel: ${{ env.FULL_KREL }}
+            Bazirano na: lineage-23.2
+          files: AngelKernel_sapphire_*.zip
