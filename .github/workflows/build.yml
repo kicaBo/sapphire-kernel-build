@@ -1,4 +1,3 @@
-
 name: Build Sapphire Kernel
 
 on:
@@ -11,25 +10,106 @@ jobs:
   build-kernel:
     name: Build Kernel
     runs-on: ubuntu-22.04
+    timeout-minutes: 360
 
     steps:
-      - name: Build Sapphire Kernel
-        uses: dabao1955/kernel_build_action@v1.10.4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ccache cpio curl flex \
+            g++-multilib gcc-multilib git gnupg gperf imagemagick \
+            lib32readline-dev lib32z1-dev libelf-dev liblz4-tool \
+            libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop \
+            pngcrush rsync schedtool squashfs-tools xsltproc zip \
+            zlib1g-dev python3 python-is-python3 libtfm-dev
+
+      - name: Download AOSP Clang (Android 16)
+        run: |
+          git clone --depth=1 -b android16-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 $HOME/clang
+          CLANG_DIR=$(ls -d $HOME/clang/clang-r* | head -n 1)
+          echo "$CLANG_DIR/bin" >> $GITHUB_PATH
+
+      - name: Clone kernel (sa submodulima)
+        run: |
+          # --recursive je kljucno za GKI/Qualcomm repo (msm-kernel)
+          git clone --depth=1 --recursive -b lineage-23.2 \
+            https://github.com/The-Angel-Place-Sapphire/kernel_xiaomi_sapphire \
+            kernel
+
+      - name: Build kernel (Pametni build)
+        working-directory: kernel
+        env:
+          ARCH: arm64
+          SUBARCH: arm64
+          LLVM: "1"
+          LLVM_IAS: "1"
+          KBUILD_BUILD_USER: kicaBo
+          KBUILD_BUILD_HOST: sapphire-build
+        run: |
+          export PATH="/usr/lib/ccache:$PATH"
+          export CC="ccache clang"
+          export CXX="ccache clang++"
+          export HOSTCC="gcc"
+          export HOSTCXX="g++"
+
+          # Provera da li repo koristi build.sh (standard za Qualcomm GKI)
+          if [ -f "build.sh" ]; then
+            echo "Pronadjen build.sh, pokrecemo GKI build..."
+            chmod +x build.sh
+            # Cesto je potrebno zadati target i config
+            ./build.sh -j$(nproc) vendor/sapphire_defconfig 2>&1 || ./build.sh 2>&1
+          else
+            echo "Nema build.sh, pokrecemo klasican make sa modulima i DTB..."
+            rm -rf out && mkdir out
+            make O=out vendor/sapphire_defconfig
+            make O=out -j$(nproc) Image.gz dtbo.img modules
+          fi
+
+          echo "KREL=$(cat out/include/config/kernel.release 2>/dev/null || cat include/config/kernel.release 2>/dev/null || echo 'Unknown')" >> $GITHUB_ENV
+
+      - name: Package AnyKernel3 (GKI moduli i DTB)
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 anykernel
+          cd anykernel
+          rm -rf .git .github README.md *placeholder*
+
+          # Nalazimo Image i DTB (bilo da je u out/ ili u common/out/)
+          find ../kernel -name "Image*" -exec cp {} ./Image \;
+          find ../kernel -name "dtbo.img" -exec cp {} ./dtbo.img \;
+          find ../kernel -name "*.dtb" -exec cp {} ./ \;
+
+          # Nalazimo Module i pakujemo ih
+          mkdir -p modules
+          find ../kernel -name "*.ko" -exec cp {} modules/ \;
+
+          # Podesavanje AnyKernel3
+          sed -i \
+            -e "s|^kernel.string=.*|kernel.string=Angel Kernel ${{ env.KREL }}|" \
+            -e "s|^do.devicecheck=.*|do.devicecheck=1|" \
+            -e "s|^do.modules=.*|do.modules=1|" \
+            -e "s|^device.name1=.*|device.name1=sapphire|" \
+            -e "s|^device.name2=.*|device.name2=sapphiren|" \
+            -e "/^device.name[3-5]=/d" \
+            -e "s|^block=.*|block=boot;|" \
+            -e "s|^is_slot_device=.*|is_slot_device=auto;|" \
+            -e "s|^ramdisk_compression=.*|ramdisk_compression=auto;|" \
+            -e "s|^patch_vbmeta_flag=.*|patch_vbmeta_flag=auto;|" \
+            anykernel.sh
+
+          ZIP="../AngelKernel-sapphire-$(date +%Y%m%d-%H%M).zip"
+          zip -r9 "$ZIP" . -x '.git*' >/dev/null
+          echo "ZIP=$ZIP" >> $GITHUB_ENV
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          kernel-url: https://github.com/The-Angel-Place-Sapphire/kernel_xiaomi_sapphire
-          kernel-branch: lineage-23.2
-          config: vendor/sapphire_defconfig
-          arch: arm64
+          name: AngelKernel-sapphire
+          path: AngelKernel-sapphire-*.zip
 
-          # AOSP toolchain
-          aosp-clang: true
-          aosp-gcc: true
-          android-version: 16
-          aosp-clang-version: r547379
-
-          # AnyKernel3 ZIP
-          anykernel3: true
-
-          # GitHub Release
-          release: true
-          access-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Angel Kernel Build ${{ github.run_number }}
+          files: AngelKernel-sapphire-*.zip
