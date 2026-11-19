@@ -44,8 +44,7 @@ jobs:
 
       - name: Clone kernel
         run: |
-          # NAPOMENA: Proveri da li novi repo koristi granu 'lineage-23.2'. 
-          # Ako koristi 'main' ili 'master', promeni -b lineage-23.2 u odgovarajuću granu.
+          # NAPOMENA: Ako saroj-nokia repo koristi 'main' ili 'master' umesto 'lineage-23.2', promeni ovde.
           git clone --depth=1 -b lineage-23.2 \
             https://github.com/saroj-nokia/kernel_xiaomi_sapphire kernel
 
@@ -86,7 +85,7 @@ jobs:
           cp ../kernel/out/arch/arm64/boot/Image ./Image
           
           # Korišćenje <<'EOF' (sa navodnicima) sprečava shell ekspanziju, 
-          # pa nema potrebe za \ ispred $ znakova.
+          # pa nema potrebe za \ ispred $ znakova. Koristimo @KREL@ placeholder.
           cat <<'EOF' > anykernel.sh
 ### AnyKernel3 Ramdisk Mod Script
 ## osm0sis @ xda-developers
