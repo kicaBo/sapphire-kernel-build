@@ -75,14 +75,13 @@ jobs:
           git clone --depth=1 https://github.com/WildKernels/AnyKernel3 anykernel
           cd anykernel
           rm -rf .git .github README.md *placeholder*
-          # ASCII crtež je u fajlu "banner" — isprazni ga, ne briši
           : > banner
           cp ../kernel/out/arch/arm64/boot/Image ./Image
-          cat <<EOF > anykernel.sh
+          cat <<'EOF' > anykernel.sh
           ### AnyKernel3 Ramdisk Mod Script
           ## osm0sis @ xda-developers
           properties() { '
-          kernel.string=Angel Kernel ${{ env.FULL_KREL }}
+          kernel.string=Angel Kernel @KREL@
           do.devicecheck=1
           do.modules=0
           do.systemless=0
@@ -99,7 +98,7 @@ jobs:
           no_magisk_check=1
           . tools/ak3-core.sh
           split_boot
-          if [ -f "\$SPLITIMG/ramdisk.cpio" ]; then
+          if [ -f "$SPLITIMG/ramdisk.cpio" ]; then
               unpack_ramdisk
               write_boot
           else
@@ -107,6 +106,10 @@ jobs:
           fi
           ui_print " " "Angel Kernel successfully flashed!" " "
           EOF
+          sed -i "s|@KREL@|${FULL_KREL}|g" anykernel.sh
+          if grep -q '@KREL@' anykernel.sh; then
+            echo "Placeholder nije zamenjen!"; exit 1
+          fi
           ZIP_NAME="AngelKernel_sapphire_$(date +%Y%m%d)_${FULL_KREL}.zip"
           zip -r9 "../$ZIP_NAME" . >/dev/null
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
@@ -125,5 +128,5 @@ jobs:
           body: |
             Automatski build za Sapphire/SapphireN
             Kernel: ${{ env.FULL_KREL }}
-            Bazirano na: lineage-23.2
+            Izvor: saroj-nokia/kernel_xiaomi_sapphire
           files: AngelKernel_sapphire_*.zip
