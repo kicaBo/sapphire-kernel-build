@@ -128,5 +128,5 @@ jobs:
           body: |
             Automatski build za Sapphire/SapphireN
             Kernel: ${{ env.FULL_KREL }}
-            Izvor: saroj-nokia/kernel_xiaomi_sapphire
+            Izvor: The-Angel-Place-Sapphire/kernel_xiaomi_sapphire
           files: AngelKernel_sapphire_*.zip
