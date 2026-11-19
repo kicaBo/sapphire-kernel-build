@@ -1,0 +1,136 @@
+name: Build Sapphire Kernel - Saroj (BakaSU)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build-kernel:
+    name: Build Kernel
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ccache cpio curl flex \
+            g++-multilib gcc-multilib git gnupg gperf imagemagick \
+            lib32readline-dev lib32z1-dev libelf-dev liblz4-tool \
+            libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop \
+            pngcrush rsync schedtool squashfs-tools xsltproc zip \
+            zlib1g-dev python3 python-is-python3 device-tree-compiler \
+            dwarves
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-sapphire-${{ github.ref_name }}
+          max-size: 2G
+      - name: Download AOSP Clang (Android 16)
+        run: |
+          git clone --depth=1 -b android16-release https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 $HOME/clang
+          CLANG_DIR=$(ls -d $HOME/clang/clang-r* | head -n 1)
+          echo "Pronadjen Clang u: $CLANG_DIR"
+          echo "$CLANG_DIR/bin" >> $GITHUB_PATH
+      - name: Clone kernel
+        run: |
+          git clone --depth=1 -b lineage-23.2 \
+            https://github.com/saroj-nokia/kernel_xiaomi_sapphire kernel
+      - name: Integrate BakaSU (Root)
+        working-directory: kernel
+        run: |
+          echo "Preuzimam i pokrecem BakaSU setup skriptu..."
+          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -
+          echo "Dodajem CONFIG_KSU=y u defconfig..."
+          DEFCONFIG_FILE=$(find arch/arm64/configs -name "*sapphire*defconfig" | head -n 1)
+          if [ -n "$DEFCONFIG_FILE" ]; then
+              echo "CONFIG_KSU=y" >> "$DEFCONFIG_FILE"
+              echo "BakaSU uspesno dodat u: $DEFCONFIG_FILE"
+          else
+              echo "Greska: Defconfig fajl nije pronadjen!"
+              exit 1
+          fi
+      - name: Build kernel (Image only)
+        working-directory: kernel
+        env:
+          ARCH: arm64
+          SUBARCH: arm64
+          LLVM: "1"
+          LLVM_IAS: "1"
+          KBUILD_BUILD_USER: kicaBo
+          KBUILD_BUILD_HOST: sapphire-build
+        run: |
+          export PATH="/usr/lib/ccache:$PATH"
+          export CC="ccache clang"
+          export CXX="ccache clang++"
+          export HOSTCC="ccache gcc"
+          export HOSTCXX="ccache g++"
+          rm -rf out && mkdir out
+          make O=out vendor/sapphire_defconfig
+          make O=out -j$(nproc) Image
+          IMG=out/arch/arm64/boot/Image
+          [ -s "$IMG" ] || { echo "Image nije napravljen!"; exit 1; }
+          echo "FULL_KREL=$(cat out/include/config/kernel.release)" >> $GITHUB_ENV
+          echo "Image size: $(du -h "$IMG" | cut -f1)"
+      - name: Package AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/WildKernels/AnyKernel3 anykernel
+          cd anykernel
+          rm -rf .git .github README.md *placeholder*
+          : > banner
+          cp ../kernel/out/arch/arm64/boot/Image ./Image
+          cat <<'EOF' > anykernel.sh
+          ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
+          properties() { '
+          kernel.string=Angel Kernel (BakaSU) @KREL@
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=0
+          do.cleanup=1
+          do.cleanuponabort=0
+          do.check_boot_version=0
+          device.name1=sapphire
+          device.name2=sapphiren
+          '; } # end properties
+          block=boot
+          is_slot_device=auto
+          ramdisk_compression=auto
+          patch_vbmeta_flag=auto
+          no_magisk_check=1
+          . tools/ak3-core.sh
+          split_boot
+          if [ -f "$SPLITIMG/ramdisk.cpio" ]; then
+              unpack_ramdisk
+              write_boot
+          else
+              flash_boot
+          fi
+          ui_print " " "Angel Kernel (BakaSU) successfully flashed!" " "
+          EOF
+          sed -i "s|@KREL@|${FULL_KREL}|g" anykernel.sh
+          if grep -q '@KREL@' anykernel.sh; then
+            echo "Placeholder nije zamenjen!"; exit 1
+          fi
+          ZIP_NAME="AngelKernel_BakaSU_sapphire_$(date +%Y%m%d)_${FULL_KREL}.zip"
+          zip -r9 "../$ZIP_NAME" . >/dev/null
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AngelKernel-BakaSU-sapphire
+          path: AngelKernel_BakaSU_sapphire_*.zip
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }} - BakaSU - ${{ env.FULL_KREL }}
+          body: |
+            Automatski build za Sapphire/SapphireN
+            Kernel: ${{ env.FULL_KREL }}
+            Izvor: saroj-nokia/kernel_xiaomi_sapphire
+            Root: BakaSU (KernelSU) integrisan
+          files: AngelKernel_BakaSU_sapphire_*.zip
