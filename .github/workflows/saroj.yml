@@ -44,7 +44,6 @@ jobs:
 
       - name: Clone kernel
         run: |
-          # NAPOMENA: Ako saroj-nokia repo koristi 'main' ili 'master' umesto 'lineage-23.2', promeni ovde.
           git clone --depth=1 -b lineage-23.2 \
             https://github.com/saroj-nokia/kernel_xiaomi_sapphire kernel
 
@@ -68,8 +67,6 @@ jobs:
           make O=out -j$(nproc) Image
           IMG=out/arch/arm64/boot/Image
           [ -s "$IMG" ] || { echo "Image nije napravljen!"; exit 1; }
-          
-          # Bez duplog hash-a: kernel.release već nosi -g<hash>
           echo "FULL_KREL=$(cat out/include/config/kernel.release)" >> $GITHUB_ENV
           echo "Image size: $(du -h "$IMG" | cut -f1)"
 
@@ -78,52 +75,41 @@ jobs:
           git clone --depth=1 https://github.com/WildKernels/AnyKernel3 anykernel
           cd anykernel
           rm -rf .git .github README.md *placeholder*
-          
-          # Isprazni banner fajl da ne crta W (ne briši ga da skripta ne pukne)
           : > banner
-          
           cp ../kernel/out/arch/arm64/boot/Image ./Image
-          
-          # Korišćenje <<'EOF' (sa navodnicima) sprečava shell ekspanziju, 
-          # pa nema potrebe za \ ispred $ znakova. Koristimo @KREL@ placeholder.
           cat <<'EOF' > anykernel.sh
-### AnyKernel3 Ramdisk Mod Script
-## osm0sis @ xda-developers
-properties() { '
-kernel.string=Angel Kernel @KREL@
-do.devicecheck=1
-do.modules=0
-do.systemless=0
-do.cleanup=1
-do.cleanuponabort=0
-do.check_boot_version=0
-device.name1=sapphire
-device.name2=sapphiren
-'; } # end properties
-block=boot
-is_slot_device=auto
-ramdisk_compression=auto
-patch_vbmeta_flag=auto
-no_magisk_check=1
-. tools/ak3-core.sh
-split_boot
-if [ -f "$SPLITIMG/ramdisk.cpio" ]; then
-    unpack_ramdisk
-    write_boot
-else
-    flash_boot
-fi
-ui_print " " "Angel Kernel successfully flashed!" " "
-EOF
-          
-          # Zamena placeholder-a stvarnom verzijom
+          ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
+          properties() { '
+          kernel.string=Angel Kernel @KREL@
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=0
+          do.cleanup=1
+          do.cleanuponabort=0
+          do.check_boot_version=0
+          device.name1=sapphire
+          device.name2=sapphiren
+          '; } # end properties
+          block=boot
+          is_slot_device=auto
+          ramdisk_compression=auto
+          patch_vbmeta_flag=auto
+          no_magisk_check=1
+          . tools/ak3-core.sh
+          split_boot
+          if [ -f "$SPLITIMG/ramdisk.cpio" ]; then
+              unpack_ramdisk
+              write_boot
+          else
+              flash_boot
+          fi
+          ui_print " " "Angel Kernel successfully flashed!" " "
+          EOF
           sed -i "s|@KREL@|${FULL_KREL}|g" anykernel.sh
-          
-          # Provera da li je zamena uspela (sigurnosna mreža)
           if grep -q '@KREL@' anykernel.sh; then
             echo "Placeholder nije zamenjen!"; exit 1
           fi
-          
           ZIP_NAME="AngelKernel_sapphire_$(date +%Y%m%d)_${FULL_KREL}.zip"
           zip -r9 "../$ZIP_NAME" . >/dev/null
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
